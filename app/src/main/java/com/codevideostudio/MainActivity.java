@@ -268,7 +268,30 @@ public class MainActivity extends Activity {
         renderPreview();
     }
 
-    private void runPython() {\n        String source = editor.getText().toString();\n        setStatus("Menjalankan Python 3...");\n        new Thread(() -> {\n            try {\n                if (!Python.isStarted()) Python.start(new AndroidPlatform(this));\n                String html = Python.getInstance().getModule("studio_runner").callAttr("run_code", source).toString();\n                runOnUiThread(() -> { pageReady = false; preview.loadDataWithBaseURL("https://codevideo.local/", html, "text/html", "UTF-8", null); setStatus("Python selesai. Hasil HTML dimuat ke preview."); });\n            } catch (Exception e) { runOnUiThread(() -> setStatus("Python error: " + e.getMessage())); }\n        }).start();\n    }\n\n    private void renderPreview() {
+    private void runPython() {
+        String source = editor.getText().toString();
+        if (source.trim().isEmpty()) {
+            setStatus("Editor Python masih kosong.");
+            return;
+        }
+        setStatus("Menjalankan Python 3...");
+        new Thread(() -> {
+            try {
+                if (!Python.isStarted()) Python.start(new AndroidPlatform(this));
+                String resultHtml = Python.getInstance().getModule("studio_runner")
+                        .callAttr("run_code", source).toString();
+                runOnUiThread(() -> {
+                    pageReady = false;
+                    preview.loadDataWithBaseURL("https://codevideo.local/", resultHtml, "text/html", "UTF-8", null);
+                    setStatus("Python selesai. Hasil dimuat ke preview.");
+                });
+            } catch (Exception error) {
+                runOnUiThread(() -> setStatus("Python error: " + error.getMessage()));
+            }
+        }).start();
+    }
+
+    private void renderPreview() {
         if (preview == null || editor == null) return;
         pageReady = false;
         String html = editor.getText().toString();
