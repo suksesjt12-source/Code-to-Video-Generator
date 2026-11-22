@@ -387,10 +387,10 @@ public class MainActivity extends Activity {
 
                 if (Build.VERSION.SDK_INT >= 29) {
                     ContentValues values = new ContentValues();
-                    values.put(MediaStore.Downloads.DISPLAY_NAME, filename);
-                    values.put(MediaStore.Downloads.MIME_TYPE, "video/webm");
-                    values.put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/CodeVideoStudio");
-                    values.put(MediaStore.Downloads.IS_PENDING, 1);
+                    values.put(MediaStore.MediaColumns.DISPLAY_NAME, filename);
+                    values.put(MediaStore.MediaColumns.MIME_TYPE, "video/webm");
+                    values.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/CodeVideoStudio");
+                    values.put(MediaStore.MediaColumns.IS_PENDING, 1);
                     savedUri = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
                     if (savedUri == null) throw new IllegalStateException("Tidak bisa membuat file di Downloads");
                     try (OutputStream output = getContentResolver().openOutputStream(savedUri)) {
@@ -399,7 +399,7 @@ public class MainActivity extends Activity {
                         output.flush();
                     }
                     ContentValues complete = new ContentValues();
-                    complete.put(MediaStore.Downloads.IS_PENDING, 0);
+                    complete.put(MediaStore.MediaColumns.IS_PENDING, 0);
                     getContentResolver().update(savedUri, complete, null, null);
                 } else {
                     File directory = getExternalFilesDir(Environment.DIRECTORY_MOVIES);
