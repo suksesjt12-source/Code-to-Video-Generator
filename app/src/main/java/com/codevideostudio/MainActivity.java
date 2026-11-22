@@ -52,6 +52,9 @@ public class MainActivity extends Activity {
     private Spinner fpsSpinner;
     private Spinner durationSpinner;
     private boolean pageReady = false;
+    private File recordingTempFile;
+    private FileOutputStream recordingStream;
+    private String recordingMimeType = "video/webm";
 
     private static final String SAMPLE_HTML =
             "<!doctype html>\n" +
@@ -376,49 +379,89 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
-        public void saveVideo(String dataUrl, String mimeType) {
-            runOnUiThread(() -> setStatus("Menyiapkan file video..."));
+        public synchronized void beginVideo(String mimeType) {
             try {
-                int comma = dataUrl.indexOf(',');
-                if (comma < 0) throw new IllegalArgumentException("Data video tidak valid");
-                byte[] video = Base64.decode(dataUrl.substring(comma + 1), Base64.DEFAULT);
-                String filename = "CodeVideo_" + timestamp() + ".webm";
-                Uri savedUri;
+                if (recordingStream != null) recordingStream.close();
+                recordingTempFile = new File(getCacheDir(), "recording-" + System.currentTimeMillis() + ".webm");
+                recordingStream = new FileOutputStream(recordingTempFile);
+                recordingMimeType = "video/webm";
+                runOnUiThread(() -> setStatus("Merekam video..."));
+            } catch (Exception error) {
+                reportRecordingError(error);
+            }
+        }
 
+        @JavascriptInterface
+        public synchronized void appendVideoChunk(String base64Chunk) {
+            try {
+                if (recordingStream == null) throw new IllegalStateException("Sesi rekaman tidak aktif");
+                byte[] bytes = Base64.decode(base64Chunk, Base64.DEFAULT);
+                recordingStream.write(bytes);
+            } catch (Exception error) {
+                reportRecordingError(error);
+            }
+        }
+
+        @JavascriptInterface
+        public synchronized void finishVideo() {
+            try {
+                if (recordingStream == null || recordingTempFile == null) {
+                    throw new IllegalStateException("Data rekaman tidak ditemukan");
+                }
+                recordingStream.flush();
+                recordingStream.close();
+                recordingStream = null;
+                String filename = "CodeVideo_" + timestamp() + ".webm";
                 if (Build.VERSION.SDK_INT >= 29) {
                     ContentValues values = new ContentValues();
                     values.put(MediaStore.MediaColumns.DISPLAY_NAME, filename);
-                    values.put(MediaStore.MediaColumns.MIME_TYPE, "video/webm");
+                    values.put(MediaStore.MediaColumns.MIME_TYPE, recordingMimeType);
                     values.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/CodeVideoStudio");
                     values.put(MediaStore.MediaColumns.IS_PENDING, 1);
-                    savedUri = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
-                    if (savedUri == null) throw new IllegalStateException("Tidak bisa membuat file di Downloads");
-                    try (OutputStream output = getContentResolver().openOutputStream(savedUri)) {
-                        if (output == null) throw new IllegalStateException("Stream output tidak tersedia");
-                        output.write(video);
+                    Uri uri = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+                    if (uri == null) throw new IllegalStateException("Tidak bisa membuat file di Downloads");
+                    try (InputStream input = new FileInputStream(recordingTempFile);
+                         OutputStream output = getContentResolver().openOutputStream(uri)) {
+                        if (output == null) throw new IllegalStateException("Stream penyimpanan tidak tersedia");
+                        byte[] buffer = new byte[64 * 1024];
+                        int count;
+                        while ((count = input.read(buffer)) != -1) output.write(buffer, 0, count);
                         output.flush();
                     }
                     ContentValues complete = new ContentValues();
                     complete.put(MediaStore.MediaColumns.IS_PENDING, 0);
-                    getContentResolver().update(savedUri, complete, null, null);
+                    getContentResolver().update(uri, complete, null, null);
                 } else {
                     File directory = getExternalFilesDir(Environment.DIRECTORY_MOVIES);
                     if (directory == null) throw new IllegalStateException("Folder penyimpanan tidak tersedia");
-                    if (!directory.exists()) directory.mkdirs();
+                    if (!directory.exists() && !directory.mkdirs()) throw new IllegalStateException("Gagal membuat folder video");
                     File target = new File(directory, filename);
-                    try (FileOutputStream output = new FileOutputStream(target)) {
-                        output.write(video);
+                    try (InputStream input = new FileInputStream(recordingTempFile);
+                         OutputStream output = new FileOutputStream(target)) {
+                        byte[] buffer = new byte[64 * 1024];
+                        int count;
+                        while ((count = input.read(buffer)) != -1) output.write(buffer, 0, count);
                     }
-                    savedUri = Uri.fromFile(target);
                 }
-
+                if (recordingTempFile.exists()) recordingTempFile.delete();
+                recordingTempFile = null;
                 runOnUiThread(() -> {
                     setStatus("Video tersimpan: Download/CodeVideoStudio/" + filename);
                     Toast.makeText(MainActivity.this, "Video berhasil disimpan", Toast.LENGTH_LONG).show();
                 });
             } catch (Exception error) {
-                runOnUiThread(() -> setStatus("Gagal menyimpan video: " + error.getMessage()));
+                reportRecordingError(error);
             }
+        }
+
+        private void reportRecordingError(Exception error) {
+            try {
+                if (recordingStream != null) recordingStream.close();
+            } catch (Exception ignored) { }
+            recordingStream = null;
+            if (recordingTempFile != null) recordingTempFile.delete();
+            recordingTempFile = null;
+            runOnUiThread(() -> setStatus("Gagal menyimpan video: " + error.getMessage()));
         }
     }
 
