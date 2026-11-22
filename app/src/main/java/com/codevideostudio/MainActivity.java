@@ -18,6 +18,8 @@ import android.webkit.WebChromeClient;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.ArrayAdapter;
+import com.chaquo.python.Python;
+import com.chaquo.python.android.AndroidPlatform;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -200,11 +202,14 @@ public class MainActivity extends Activity {
         actions1.setPadding(0, dp(8), 0, 0);
         Button run = makeButton("Run Preview", ACCENT);
         Button sample = makeButton("Contoh", Color.rgb(45, 61, 88));
+        Button python = makeButton("Run Python", Color.rgb(105, 75, 190));
         actions1.addView(run, new LinearLayout.LayoutParams(0, dp(48), 1));
         actions1.addView(sample, new LinearLayout.LayoutParams(0, dp(48), 1));
+        actions1.addView(python, new LinearLayout.LayoutParams(0, dp(48), 1));
         root.addView(actions1);
         run.setOnClickListener(v -> renderPreview());
         sample.setOnClickListener(v -> loadSample());
+        python.setOnClickListener(v -> runPython());
 
         TextView exportTitle = label("VIDEO EXPORT", 13, TEXT, true);
         exportTitle.setPadding(0, dp(18), 0, dp(8));
@@ -263,7 +268,7 @@ public class MainActivity extends Activity {
         renderPreview();
     }
 
-    private void renderPreview() {
+    private void runPython() {\n        String source = editor.getText().toString();\n        setStatus("Menjalankan Python 3...");\n        new Thread(() -> {\n            try {\n                if (!Python.isStarted()) Python.start(new AndroidPlatform(this));\n                String html = Python.getInstance().getModule("studio_runner").callAttr("run_code", source).toString();\n                runOnUiThread(() -> { pageReady = false; preview.loadDataWithBaseURL("https://codevideo.local/", html, "text/html", "UTF-8", null); setStatus("Python selesai. Hasil HTML dimuat ke preview."); });\n            } catch (Exception e) { runOnUiThread(() -> setStatus("Python error: " + e.getMessage())); }\n        }).start();\n    }\n\n    private void renderPreview() {
         if (preview == null || editor == null) return;
         pageReady = false;
         String html = editor.getText().toString();
